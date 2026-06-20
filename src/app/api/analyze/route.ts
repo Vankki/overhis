@@ -30,11 +30,15 @@ const analyzeRequestSchema = z.object({
   gameMode: z.enum(["competitive", "quickplay"]).default("competitive"),
 });
 
+type AnalyzeErrorWithQuotaResponse = AnalyzeErrorResponse & {
+  quota?: AnalyzeSuccessResponse["quota"];
+};
+
 function jsonError(
-  response: AnalyzeErrorResponse,
+  response: AnalyzeErrorWithQuotaResponse,
   status: number,
-): NextResponse<AnalyzeErrorResponse> {
-  return NextResponse.json<AnalyzeErrorResponse>(response, { status });
+): NextResponse<AnalyzeErrorWithQuotaResponse> {
+  return NextResponse.json<AnalyzeErrorWithQuotaResponse>(response, { status });
 }
 
 async function readBody(request: Request): Promise<unknown | null> {
@@ -109,7 +113,32 @@ export async function POST(request: Request) {
 
     try {
       const analysis = await generateAiAnalysis(snapshot);
-      const consumedQuota = await consumeRateLimit(redis, ip);
+      let consumedQuota;
+      try {
+        consumedQuota = await consumeRateLimit(redis, ip);
+      } catch {
+        return jsonError(
+          {
+            ok: false,
+            code: "RATE_LIMIT_UNAVAILABLE",
+            message: "限流服务暂时不可用，请稍后重试。",
+          },
+          503,
+        );
+      }
+
+      if (consumedQuota.limited) {
+        return jsonError(
+          {
+            ok: false,
+            code: "RATE_LIMITED",
+            message: "今天这个 IP 的 5 次 AI 分析已经用完，明天再来。",
+            quota: consumedQuota,
+          },
+          429,
+        );
+      }
+
       const response: AnalyzeSuccessResponse = {
         ok: true,
         snapshot,
