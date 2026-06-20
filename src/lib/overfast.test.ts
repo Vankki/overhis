@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { buildPlayerSnapshot, OverfastError } from "./overfast";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  buildPlayerSnapshot,
+  fetchPlayerStatsSummary,
+  fetchPlayerSummary,
+  OverfastError,
+} from "./overfast";
 
 const summary = {
   username: "TeKrop",
@@ -113,6 +118,71 @@ describe("buildPlayerSnapshot", () => {
     expect(snapshot.player.ranks).toEqual([]);
     expect(snapshot.topHeroes).toEqual([]);
   });
+
+  it("omits null role entries and maps valid role stats", () => {
+    const snapshot = buildPlayerSnapshot({
+      playerId: "RoleCheck-1234",
+      battleTag: "RoleCheck#1234",
+      platform: "pc",
+      gameMode: "competitive",
+      summary,
+      stats: {
+        ...stats,
+        roles: {
+          tank: null,
+          support: stats.general,
+        },
+      },
+    });
+
+    expect(snapshot.roles).not.toHaveProperty("tank");
+    expect(snapshot.roles.support.winrate).toBe(31.58);
+    expect(snapshot.roles.support.totalHealing).toBe(176745);
+  });
+
+  it("ignores null heroes and keeps the top five by play time", () => {
+    const snapshot = buildPlayerSnapshot({
+      playerId: "HeroCheck-1234",
+      battleTag: "HeroCheck#1234",
+      platform: "pc",
+      gameMode: "competitive",
+      summary,
+      stats: {
+        ...stats,
+        heroes: {
+          zero: { time_played: 0 },
+          broken: null,
+          one: { time_played: 100, average: {} },
+          two: { time_played: 200, average: {} },
+          three: { time_played: 300, average: {} },
+          four: { time_played: 400, average: {} },
+          five: { time_played: 500, average: {} },
+          six: { time_played: 600, average: {} },
+        },
+      },
+    });
+
+    expect(snapshot.topHeroes.map((hero) => hero.hero)).toEqual([
+      "six",
+      "five",
+      "four",
+      "three",
+      "two",
+    ]);
+  });
+
+  it("returns null for malformed timestamps", () => {
+    const snapshot = buildPlayerSnapshot({
+      playerId: "TimeCheck-1234",
+      battleTag: "TimeCheck#1234",
+      platform: "pc",
+      gameMode: "competitive",
+      summary: { ...summary, last_updated_at: Number.MAX_SAFE_INTEGER },
+      stats,
+    });
+
+    expect(snapshot.player.lastUpdatedAt).toBeNull();
+  });
 });
 
 describe("OverfastError", () => {
@@ -120,5 +190,71 @@ describe("OverfastError", () => {
     const error = new OverfastError("PLAYER_NOT_FOUND", "没有找到这个玩家");
     expect(error.code).toBe("PLAYER_NOT_FOUND");
     expect(error.message).toBe("没有找到这个玩家");
+  });
+
+  it("stores optional status and cause context", () => {
+    const cause = new Error("network down");
+    const error = new OverfastError("OVERFAST_UNAVAILABLE", "不可用", {
+      status: 503,
+      cause,
+    });
+
+    expect(error.status).toBe(503);
+    expect(error.cause).toBe(cause);
+  });
+});
+
+describe("OverFast fetchers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("encodes the player id path for summary requests", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    await fetchPlayerSummary("Te Krop#2217");
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      "https://overfast-api.tekrop.fr/players/Te%20Krop%232217/summary",
+    );
+  });
+
+  it("includes game mode and platform query params for stats requests", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    await fetchPlayerStatsSummary("TeKrop-2217", "competitive", "pc");
+
+    const [url] = fetchMock.mock.calls[0];
+    const parsed = new URL(String(url));
+    expect(parsed.pathname).toBe("/players/TeKrop-2217/stats/summary");
+    expect(parsed.searchParams.get("gamemode")).toBe("competitive");
+    expect(parsed.searchParams.get("platform")).toBe("pc");
+  });
+
+  it("maps 404 responses to a player not found error with status", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 404 }),
+    );
+
+    await expect(fetchPlayerSummary("Missing-1234")).rejects.toMatchObject({
+      code: "PLAYER_NOT_FOUND",
+      status: 404,
+    });
+  });
+
+  it("maps 503 responses to an unavailable error with status", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 503 }),
+    );
+
+    await expect(fetchPlayerSummary("TeKrop-2217")).rejects.toMatchObject({
+      code: "OVERFAST_UNAVAILABLE",
+      status: 503,
+    });
   });
 });

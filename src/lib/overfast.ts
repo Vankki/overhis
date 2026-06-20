@@ -23,11 +23,19 @@ interface BuildPlayerSnapshotInput {
 
 export class OverfastError extends Error {
   code: ApiErrorCode;
+  status?: number;
+  cause?: unknown;
 
-  constructor(code: ApiErrorCode, message: string) {
+  constructor(
+    code: ApiErrorCode,
+    message: string,
+    options: { status?: number; cause?: unknown } = {},
+  ) {
     super(message);
     this.name = "OverfastError";
     this.code = code;
+    this.status = options.status;
+    this.cause = options.cause;
   }
 }
 
@@ -47,13 +55,16 @@ async function fetchJson<TData>(
     });
 
     if (response.status === 404) {
-      throw new OverfastError("PLAYER_NOT_FOUND", "没有找到这个玩家");
+      throw new OverfastError("PLAYER_NOT_FOUND", "没有找到这个玩家", {
+        status: response.status,
+      });
     }
 
     if (!response.ok) {
       throw new OverfastError(
         "OVERFAST_UNAVAILABLE",
         "OverFast 暂时不可用，请稍后再试",
+        { status: response.status },
       );
     }
 
@@ -66,6 +77,7 @@ async function fetchJson<TData>(
     throw new OverfastError(
       "OVERFAST_UNAVAILABLE",
       "OverFast 暂时不可用，请稍后再试",
+      { cause: error },
     );
   } finally {
     clearTimeout(timeout);
@@ -97,10 +109,12 @@ export async function fetchPlayerStatsSummary(
   return fetchJson(url.toString(), options);
 }
 
+function isRecord(value: unknown): value is JsonRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function asRecord(value: unknown): JsonRecord {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as JsonRecord)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 function asNumber(value: unknown): number {
@@ -154,7 +168,9 @@ function extractRoles(stats: unknown): Record<string, PlayerSnapshot["general"]>
   const roles = asRecord(asRecord(stats).roles);
 
   return Object.fromEntries(
-    Object.entries(roles).map(([role, value]) => [role, mapGeneral(value)]),
+    Object.entries(roles)
+      .filter(([, value]) => isRecord(value))
+      .map(([role, value]) => [role, mapGeneral(value)]),
   );
 }
 
@@ -185,6 +201,20 @@ function extractTopHeroes(stats: unknown): HeroSnapshot[] {
     .slice(0, 5);
 }
 
+function formatLastUpdatedAt(value: unknown): string | null {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    return null;
+  }
+
+  const timestampMs = value * 1000;
+  if (!Number.isSafeInteger(timestampMs)) {
+    return null;
+  }
+
+  const date = new Date(timestampMs);
+  return Number.isFinite(date.valueOf()) ? date.toISOString() : null;
+}
+
 export function buildPlayerSnapshot({
   playerId,
   battleTag,
@@ -195,7 +225,6 @@ export function buildPlayerSnapshot({
 }: BuildPlayerSnapshotInput): PlayerSnapshot {
   const summaryRecord = asRecord(summary);
   const endorsement = asRecord(summaryRecord.endorsement);
-  const lastUpdatedAt = asNumber(summaryRecord.last_updated_at);
 
   return {
     player: {
@@ -208,8 +237,7 @@ export function buildPlayerSnapshot({
           ? endorsement.level
           : null,
       ranks: extractRanks(summary, platform),
-      lastUpdatedAt:
-        lastUpdatedAt > 0 ? new Date(lastUpdatedAt * 1000).toISOString() : null,
+      lastUpdatedAt: formatLastUpdatedAt(summaryRecord.last_updated_at),
     },
     query: {
       battleTag,
