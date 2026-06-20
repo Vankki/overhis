@@ -20,6 +20,18 @@ export function Analyzer() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (loading) {
+      return;
+    }
+
+    const trimmedBattleTag = battleTag.trim();
+
+    if (!trimmedBattleTag) {
+      setError("请输入 BattleTag。");
+      setResult(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -29,7 +41,7 @@ export function Analyzer() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ battleTag, platform, gameMode }),
+        body: JSON.stringify({ battleTag: trimmedBattleTag, platform, gameMode }),
       });
 
       const payload = (await response.json()) as AnalyzeResponse;
@@ -50,7 +62,10 @@ export function Analyzer() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
+    <main
+      aria-busy={loading}
+      className="min-h-screen bg-zinc-50 px-4 py-6 text-zinc-950 sm:px-6 lg:px-8"
+    >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="max-w-3xl">
@@ -65,7 +80,11 @@ export function Analyzer() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px_160px_auto] lg:items-end">
+          <form
+            aria-busy={loading}
+            onSubmit={handleSubmit}
+            className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px_160px_auto] lg:items-end"
+          >
             <label className="min-w-0">
               <span className="text-sm font-medium text-zinc-700">BattleTag</span>
               <input
@@ -116,13 +135,20 @@ export function Analyzer() {
         </section>
 
         {error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
             {error}
           </div>
         ) : null}
 
         {loading ? (
-          <div className="rounded-lg border border-zinc-200 bg-white px-4 py-5 text-sm text-zinc-600 shadow-sm">
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-lg border border-zinc-200 bg-white px-4 py-5 text-sm text-zinc-600 shadow-sm"
+          >
             正在查询战绩并生成分析，稍等一下。
           </div>
         ) : null}

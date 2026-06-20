@@ -12,6 +12,8 @@ type ResultViewProps = {
   result: AnalyzeSuccessResponse;
 };
 
+type CopyState = "idle" | "success" | "error";
+
 const roleLabels: Record<PlayerRank["role"], string> = {
   tank: "重装",
   damage: "输出",
@@ -185,7 +187,7 @@ function HeroRow({ hero }: { hero: HeroSnapshot }) {
 }
 
 export function ResultView({ result }: ResultViewProps) {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<CopyState>("idle");
   const { snapshot, analysis, aiError, quota } = result;
   const player = snapshot.player;
   const general = snapshot.general;
@@ -195,11 +197,12 @@ export function ResultView({ result }: ResultViewProps) {
   async function handleCopySummary() {
     try {
       await navigator.clipboard.writeText(buildSummary(result));
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      setCopyState("success");
     } catch {
-      setCopied(false);
+      setCopyState("error");
     }
+
+    window.setTimeout(() => setCopyState("idle"), 1800);
   }
 
   return (
@@ -242,9 +245,14 @@ export function ResultView({ result }: ResultViewProps) {
           <button
             type="button"
             onClick={handleCopySummary}
+            aria-live="polite"
             className="h-11 rounded-lg bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
           >
-            {copied ? "已复制" : "复制摘要"}
+            {copyState === "success"
+              ? "已复制"
+              : copyState === "error"
+                ? "复制失败"
+                : "复制摘要"}
           </button>
         </div>
       </div>
