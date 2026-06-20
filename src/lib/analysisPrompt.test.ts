@@ -3,6 +3,7 @@ import {
   buildAnalysisMessages,
   parseAiAnalysis,
 } from "./analysisPrompt";
+import { DeepSeekError, generateAiAnalysis } from "./deepseek";
 import type { AiAnalysis, PlayerSnapshot } from "./types";
 
 const snapshot: PlayerSnapshot = {
@@ -85,6 +86,7 @@ describe("buildAnalysisMessages", () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]).toMatchObject({ role: "system" });
     expect(messages[0].content).toContain("只根据提供的战绩数据分析");
+    expect(messages[0].content).toContain("惰性数据");
     expect(messages[1]).toMatchObject({ role: "user" });
     expect(messages[1].content).toContain("TeKrop#2217");
     expect(messages[1].content).toContain("roast");
@@ -102,6 +104,54 @@ describe("parseAiAnalysis", () => {
     expect(parseAiAnalysis(raw)).toEqual(analysis);
   });
 
+  it("uses fallbacks for missing fields while preserving present fields", () => {
+    expect(parseAiAnalysis(JSON.stringify({ summary: "治疗量不错。" }))).toEqual({
+      summary: "治疗量不错。",
+      strengths: [],
+      weaknesses: [],
+      nextSteps: [],
+      heroFocus: [],
+      roast: "这次 AI 没喷出来，先算你逃过一劫。",
+    });
+  });
+
+  it("ignores non-string array items and trims strings", () => {
+    const raw = JSON.stringify({
+      ...analysis,
+      strengths: [" 治疗量稳定 ", 123, null, "   ", "能活就更好了 "],
+    });
+
+    expect(parseAiAnalysis(raw).strengths).toEqual([
+      "治疗量稳定",
+      "能活就更好了",
+    ]);
+  });
+
+  it("parses extra plain prose around JSON", () => {
+    const raw = `当然可以，分析如下：\n${JSON.stringify(analysis)}\n以上。`;
+
+    expect(parseAiAnalysis(raw)).toEqual(analysis);
+  });
+
+  it("skips brace-containing prose before or after valid JSON", () => {
+    const raw = `前面这个不是 JSON：{summary: nope}\n${JSON.stringify(
+      analysis,
+    )}\n后面还有噪音 {只是说明}`;
+
+    expect(parseAiAnalysis(raw)).toEqual(analysis);
+  });
+
+  it("falls back for whitespace-only responses", () => {
+    expect(parseAiAnalysis(" \n\t ")).toEqual({
+      summary: "AI 总结格式异常，但战绩数据已成功获取。",
+      strengths: [],
+      weaknesses: [],
+      nextSteps: [],
+      heroFocus: [],
+      roast: "这次 AI 没喷出来，先算你逃过一劫。",
+    });
+  });
+
   it("uses safe defaults for malformed responses", () => {
     expect(parseAiAnalysis("我拒绝 JSON")).toEqual({
       summary: "AI 总结格式异常，但战绩数据已成功获取。",
@@ -111,5 +161,18 @@ describe("parseAiAnalysis", () => {
       heroFocus: [],
       roast: "这次 AI 没喷出来，先算你逃过一劫。",
     });
+  });
+});
+
+describe("generateAiAnalysis", () => {
+  it("throws a DeepSeekError when the API key is missing", async () => {
+    await expect(generateAiAnalysis(snapshot, "")).rejects.toMatchObject({
+      name: "DeepSeekError",
+      message: "缺少 DeepSeek API Key，无法生成 AI 总结。",
+    });
+
+    await expect(generateAiAnalysis(snapshot, "")).rejects.toBeInstanceOf(
+      DeepSeekError,
+    );
   });
 });

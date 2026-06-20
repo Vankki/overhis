@@ -30,6 +30,8 @@ export async function generateAiAnalysis(
       model: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash",
       messages: buildAnalysisMessages(snapshot),
       temperature: 0.85,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
       stream: false,
     });
 
