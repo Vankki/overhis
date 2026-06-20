@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AiAnalysis,
   AnalyzeSuccessResponse,
@@ -188,13 +188,26 @@ function HeroRow({ hero }: { hero: HeroSnapshot }) {
 
 export function ResultView({ result }: ResultViewProps) {
   const [copyState, setCopyState] = useState<CopyState>("idle");
+  const copyResetTimeoutRef = useRef<number | null>(null);
   const { snapshot, analysis, aiError, quota } = result;
   const player = snapshot.player;
   const general = snapshot.general;
   const modeLabel = snapshot.query.gameMode === "competitive" ? "竞技" : "快速";
   const platformLabel = snapshot.query.platform === "pc" ? "PC" : "主机";
 
+  useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
+    };
+  }, []);
+
   async function handleCopySummary() {
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    }
+
     try {
       await navigator.clipboard.writeText(buildSummary(result));
       setCopyState("success");
@@ -202,7 +215,10 @@ export function ResultView({ result }: ResultViewProps) {
       setCopyState("error");
     }
 
-    window.setTimeout(() => setCopyState("idle"), 1800);
+    copyResetTimeoutRef.current = window.setTimeout(() => {
+      setCopyState("idle");
+      copyResetTimeoutRef.current = null;
+    }, 1800);
   }
 
   return (
