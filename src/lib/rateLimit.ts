@@ -29,12 +29,30 @@ export function getClientIp(headers: Headers): string {
     }
   }
 
-  return headers.get("x-real-ip")?.trim() || "unknown";
+  for (const header of [
+    "x-real-ip",
+    "cf-connecting-ip",
+    "true-client-ip",
+    "x-client-ip",
+  ]) {
+    const ip = headers.get(header)?.trim();
+    if (ip) {
+      return ip;
+    }
+  }
+
+  // Keep a deterministic fallback so tests and callers can handle missing proxy data.
+  return "unknown";
 }
 
 export function getRateLimitKey(ip: string, now = new Date()): string {
   const yyyyMmDd = now.toISOString().slice(0, 10);
   return `ow-ai:${ip}:${yyyyMmDd}`;
+}
+
+function parseUsedCount(raw: unknown): number {
+  const used = typeof raw === "number" ? raw : Number(raw ?? 0);
+  return Number.isFinite(used) && used >= 0 ? used : DAILY_LIMIT;
 }
 
 export async function getRateLimitStatus(
@@ -43,8 +61,8 @@ export async function getRateLimitStatus(
   now = new Date(),
 ): Promise<RateLimitStatus> {
   const key = getRateLimitKey(ip, now);
-  const raw = await redis.get<number>(key);
-  const used = typeof raw === "number" ? raw : Number(raw ?? 0);
+  const raw = await redis.get(key);
+  const used = parseUsedCount(raw);
   const remaining = Math.max(DAILY_LIMIT - used, 0);
 
   return {
@@ -62,6 +80,7 @@ export async function consumeRateLimit(
 ): Promise<RateLimitStatus> {
   const key = getRateLimitKey(ip, now);
   const used = await redis.incr(key);
+  // Date-scoped keys isolate each daily bucket, so extending the TTL on each hit is acceptable.
   await redis.expire(key, RATE_LIMIT_TTL_SECONDS);
   const remaining = Math.max(DAILY_LIMIT - used, 0);
 
