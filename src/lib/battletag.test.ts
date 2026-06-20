@@ -30,4 +30,19 @@ describe("normalizeBattleTag", () => {
       "BattleTag 格式不对，请输入类似 TeKrop#2217 的格式。",
     );
   });
+
+  it("rejects names containing additional # separators", () => {
+    expect(() => normalizeBattleTag("Foo#Bar#1234")).toThrow(
+      "BattleTag 格式不对，请输入类似 TeKrop#2217 的格式。",
+    );
+  });
+
+  it("rejects whitespace inside player names", () => {
+    expect(() => normalizeBattleTag("Te Krop#2217")).toThrow(
+      "BattleTag 格式不对，请输入类似 TeKrop#2217 的格式。",
+    );
+    expect(() => normalizeBattleTag("TeKrop\t#2217")).toThrow(
+      "BattleTag 格式不对，请输入类似 TeKrop#2217 的格式。",
+    );
+  });
 });

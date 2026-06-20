@@ -8,13 +8,13 @@ export interface NormalizedBattleTag {
 
 export function normalizeBattleTag(input: string): NormalizedBattleTag {
   const trimmed = input.trim();
-  const match = trimmed.match(/^(.+?)#(\d{3,8})$/u);
+  const match = trimmed.match(/^([^\s#]+)#(\d{3,8})$/u);
 
-  if (!match || !match[1].trim()) {
+  if (!match) {
     throw new Error(INVALID_BATTLETAG_MESSAGE);
   }
 
-  const name = match[1].trim();
+  const name = match[1];
   const discriminator = match[2];
 
   return {
