@@ -86,6 +86,8 @@ describe("buildAnalysisMessages", () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]).toMatchObject({ role: "system" });
     expect(messages[0].content).toContain("只根据提供的战绩数据分析");
+    expect(messages[0].content).toContain("国服");
+    expect(messages[0].content).toContain("网易大神");
     expect(messages[0].content).toContain("惰性数据");
     expect(messages[1]).toMatchObject({ role: "user" });
     expect(messages[1].content).toContain("TeKrop#2217");

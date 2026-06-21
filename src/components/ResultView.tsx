@@ -193,7 +193,7 @@ export function ResultView({ result }: ResultViewProps) {
   const player = snapshot.player;
   const general = snapshot.general;
   const modeLabel = snapshot.query.gameMode === "competitive" ? "竞技" : "快速";
-  const platformLabel = snapshot.query.platform === "pc" ? "PC" : "主机";
+  const serverLabel = "国服";
 
   useEffect(() => {
     return () => {
@@ -242,7 +242,7 @@ export function ResultView({ result }: ResultViewProps) {
                 {player.name || snapshot.query.battleTag}
               </h2>
               <p className="mt-1 break-words text-sm text-zinc-500">
-                {player.title || "公开生涯资料"} · {platformLabel} · {modeLabel}
+                {player.title || "公开生涯资料"} · {serverLabel} · {modeLabel}
               </p>
               {player.ranks.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">

@@ -6,12 +6,11 @@ import type {
   AnalyzeResponse,
   AnalyzeSuccessResponse,
   GameMode,
-  Platform,
 } from "@/lib/types";
 
 export function Analyzer() {
-  const [battleTag, setBattleTag] = useState("");
-  const [platform, setPlatform] = useState<Platform>("pc");
+  const [battleTagName, setBattleTagName] = useState("");
+  const [battleTagNumber, setBattleTagNumber] = useState("");
   const [gameMode, setGameMode] = useState<GameMode>("competitive");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,13 +23,22 @@ export function Analyzer() {
       return;
     }
 
-    const trimmedBattleTag = battleTag.trim();
+    const trimmedName = battleTagName.trim();
+    const trimmedNumber = battleTagNumber.trim();
 
-    if (!trimmedBattleTag) {
-      setError("请输入 BattleTag。");
+    if (!trimmedName || !trimmedNumber) {
+      setError("请输入国服 BattleTag 的昵称和数字编号。");
       setResult(null);
       return;
     }
+
+    if (!/^\d{3,8}$/u.test(trimmedNumber)) {
+      setError("国服 BattleTag 编号应为 3-8 位数字。");
+      setResult(null);
+      return;
+    }
+
+    const battleTag = `${trimmedName}#${trimmedNumber}`;
 
     setLoading(true);
     setError(null);
@@ -41,7 +49,7 @@ export function Analyzer() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ battleTag: trimmedBattleTag, platform, gameMode }),
+        body: JSON.stringify({ battleTag, gameMode }),
       });
 
       const payload = (await response.json()) as AnalyzeResponse;
@@ -70,43 +78,55 @@ export function Analyzer() {
         <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Overwatch AI Review
+              Overwatch CN AI Review
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
-              守望先锋生涯数据分析
+              守望先锋国服战绩 AI 分析
             </h1>
             <p className="mt-3 text-sm leading-6 text-zinc-600 sm:text-base">
-              输入公开 BattleTag，拉取生涯数据并生成一份能直接行动的排位复盘。
+              输入国服 BattleTag，查询网易大神国服战绩并生成一份能直接行动的排位复盘。
             </p>
           </div>
 
           <form
             aria-busy={loading}
             onSubmit={handleSubmit}
-            className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px_160px_auto] lg:items-end"
+            className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px_auto] lg:items-end"
           >
-            <label className="min-w-0">
-              <span className="text-sm font-medium text-zinc-700">BattleTag</span>
-              <input
-                value={battleTag}
-                onChange={(event) => setBattleTag(event.target.value)}
-                placeholder="TeKrop#2217"
-                className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-base text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
-                autoComplete="off"
-              />
-            </label>
-
-            <label>
-              <span className="text-sm font-medium text-zinc-700">平台</span>
-              <select
-                value={platform}
-                onChange={(event) => setPlatform(event.target.value as Platform)}
-                className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-base text-zinc-950 outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(6.5rem,8rem)] items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(8rem,10rem)] sm:gap-3">
+              <label className="min-w-0">
+                <span className="text-sm font-medium text-zinc-700">
+                  玩家昵称
+                </span>
+                <input
+                  value={battleTagName}
+                  onChange={(event) => setBattleTagName(event.target.value)}
+                  placeholder="西野七濑"
+                  className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-base text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+                  autoComplete="off"
+                />
+              </label>
+              <span
+                aria-hidden="true"
+                className="flex h-11 items-center text-xl font-semibold text-zinc-500"
               >
-                <option value="pc">PC</option>
-                <option value="console">主机</option>
-              </select>
-            </label>
+                #
+              </span>
+              <label>
+                <span className="text-sm font-medium text-zinc-700">编号</span>
+                <input
+                  value={battleTagNumber}
+                  onChange={(event) =>
+                    setBattleTagNumber(event.target.value.replace(/\D/gu, ""))
+                  }
+                  placeholder="51404"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-base text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
 
             <label>
               <span className="text-sm font-medium text-zinc-700">模式</span>
@@ -130,7 +150,7 @@ export function Analyzer() {
           </form>
 
           <p className="mt-4 text-sm leading-6 text-zinc-500">
-            仅支持公开资料。AI 分析有每日限额，请优先查询你最想复盘的账号。
+            仅支持国服公开资料，# 已固定，无需输入。AI 分析有每日限额，请优先查询你最想复盘的账号。
           </p>
         </section>
 
