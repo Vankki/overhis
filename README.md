@@ -1,17 +1,19 @@
 # Overhis
 
-Overhis is a public Overwatch stats analysis website. Users enter a BattleTag, the app fetches public OverFast stats, and DeepSeek generates a Chinese analysis with practical advice and a sharp roast.
+Overhis is a Chinese-server Overwatch stats analysis website. Users enter a national-server BattleTag as name plus numeric suffix, the app queries a local Overstats service, and DeepSeek generates a Chinese analysis with practical advice and a sharp roast.
 
 ## Features
 
-- BattleTag lookup in `Name#1234` format.
-- PC and console platform selector.
+- National-server BattleTag lookup in `Name#12345` format.
+- Fixed `#` separator in the UI, so users only enter the nickname and number.
 - Competitive and quickplay mode selector.
-- Public profile stats from OverFast.
+- Chinese-server profile and match data through Overstats / NetEase Dashen.
 - DeepSeek AI analysis.
 - Same-IP daily limit of 5 successful AI analyses.
 
 ## Local Setup
+
+Start the separate Overstats service first and confirm it is reachable, for example at `http://127.0.0.1:18080`.
 
 ```powershell
 npm install
@@ -24,11 +26,16 @@ Fill `.env.local` with:
 ```text
 DEEPSEEK_API_KEY=your_deepseek_key
 DEEPSEEK_MODEL=deepseek-v4-flash
+OVERSTATS_BASE_URL=http://127.0.0.1:18080
 UPSTASH_REDIS_REST_URL=your_upstash_rest_url
 UPSTASH_REDIS_REST_TOKEN=your_upstash_rest_token
 ```
 
 Open `http://localhost:3000`.
+
+## Overstats Credentials
+
+`DASHEN_ROLE_ID` and `DASHEN_TOKEN` belong in the separate Overstats service configuration, not in this Next.js repository, not in `.env.local`, and not in chat logs. This app only needs `OVERSTATS_BASE_URL`.
 
 ## Tests
 
@@ -39,17 +46,19 @@ npm run build
 
 ## Deployment
 
-Deploy to Vercel and add these environment variables in the Vercel project settings:
+Deploy to Vercel or another Node.js host and add these environment variables:
 
 - `DEEPSEEK_API_KEY`
 - `DEEPSEEK_MODEL`
+- `OVERSTATS_BASE_URL`
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
-The app can use the default Vercel domain for the first public release.
+The deployed app must be able to reach the Overstats service URL configured in `OVERSTATS_BASE_URL`.
 
 ## External Dependencies
 
-- OverFast API for public Overwatch career data.
+- Overstats service for Chinese-server Overwatch career and match data.
+- NetEase Dashen credentials configured inside the Overstats service.
 - DeepSeek API for AI analysis.
 - Upstash Redis for per-IP daily quota.
