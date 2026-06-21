@@ -1,5 +1,5 @@
 const INVALID_BATTLETAG_MESSAGE =
-  "BattleTag 格式不对，请输入类似 TeKrop#2217 的格式。";
+  "国服 BattleTag 格式不对，请输入玩家昵称和数字编号。";
 
 export interface NormalizedBattleTag {
   display: string;
@@ -7,7 +7,7 @@ export interface NormalizedBattleTag {
 }
 
 export function normalizeBattleTag(input: string): NormalizedBattleTag {
-  const trimmed = input.trim();
+  const trimmed = input.trim().replace("＃", "#");
   const match = trimmed.match(/^([^\s#]+)#(\d{3,8})$/u);
 
   if (!match) {
@@ -19,7 +19,7 @@ export function normalizeBattleTag(input: string): NormalizedBattleTag {
 
   return {
     display: `${name}#${discriminator}`,
-    playerId: `${name}-${discriminator}`,
+    playerId: `${name}#${discriminator}`,
   };
 }
 
