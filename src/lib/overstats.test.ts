@@ -191,6 +191,52 @@ describe("buildOverstatsPlayerSnapshot", () => {
     expect(snapshot.general.gamesPlayed).toBe(0);
     expect(snapshot.topHeroes).toEqual([]);
   });
+
+  it("maps Dashen hero ids to readable Chinese hero names", () => {
+    const snapshot = buildOverstatsPlayerSnapshot({
+      battleTag: "西野七濑#51404",
+      gameMode: "quickplay",
+      profile,
+      matchList: {
+        ok: true,
+        matches: [
+          {
+            matchRet: 1,
+            heroGuid: "207165582859044140",
+            kill: 14,
+            assist: 0,
+            death: 7,
+            heroDamage: 6882,
+            cure: 0,
+          },
+          {
+            matchRet: 1,
+            heroGuid: "207165582859043131",
+            kill: 8,
+            assist: 12,
+            death: 2,
+            heroDamage: 3655,
+            cure: 10000,
+          },
+          {
+            matchRet: 0,
+            heroGuid: "207165582859043779",
+            kill: 10,
+            assist: 11,
+            death: 6,
+            heroDamage: 5772,
+            cure: 6817,
+          },
+        ],
+      },
+    });
+
+    expect(snapshot.topHeroes.map((hero) => hero.hero)).toEqual([
+      "死怨",
+      "安娜",
+      "无漾",
+    ]);
+  });
 });
 
 describe("OverstatsError", () => {
