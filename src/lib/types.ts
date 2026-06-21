@@ -15,7 +15,6 @@ export type ApiErrorCode =
 
 export interface AnalyzeRequest {
   battleTag: string;
-  platform: Platform;
   gameMode: GameMode;
 }
 

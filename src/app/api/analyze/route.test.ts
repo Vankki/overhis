@@ -25,14 +25,38 @@ const mocks = vi.hoisted(() => {
     }
   }
 
+  class MockOverstatsError extends Error {
+    code: string;
+    status?: number;
+
+    constructor(
+      code: string,
+      message: string,
+      options: { status?: number } = {},
+    ) {
+      super(message);
+      this.name = "OverstatsError";
+      this.code = code;
+      this.status = options.status;
+    }
+  }
+
+  const failOnOverfast = vi.fn(() => {
+    throw new Error("Route should not call OverFast");
+  });
+
   return {
     redis: {},
     DeepSeekError: MockDeepSeekError,
     OverfastError: MockOverfastError,
+    OverstatsError: MockOverstatsError,
     generateAiAnalysis: vi.fn(),
-    buildPlayerSnapshot: vi.fn(),
-    fetchPlayerStatsSummary: vi.fn(),
-    fetchPlayerSummary: vi.fn(),
+    buildPlayerSnapshot: failOnOverfast,
+    fetchPlayerStatsSummary: failOnOverfast,
+    fetchPlayerSummary: failOnOverfast,
+    buildOverstatsPlayerSnapshot: vi.fn(),
+    fetchOverstatsMatchList: vi.fn(),
+    fetchOverstatsProfile: vi.fn(),
     consumeRateLimit: vi.fn(),
     createRedisClient: vi.fn(),
     getClientIp: vi.fn(),
@@ -52,6 +76,13 @@ vi.mock("@/lib/overfast", () => ({
   fetchPlayerSummary: mocks.fetchPlayerSummary,
 }));
 
+vi.mock("@/lib/overstats", () => ({
+  OverstatsError: mocks.OverstatsError,
+  buildOverstatsPlayerSnapshot: mocks.buildOverstatsPlayerSnapshot,
+  fetchOverstatsMatchList: mocks.fetchOverstatsMatchList,
+  fetchOverstatsProfile: mocks.fetchOverstatsProfile,
+}));
+
 vi.mock("@/lib/rateLimit", () => ({
   consumeRateLimit: mocks.consumeRateLimit,
   createRedisClient: mocks.createRedisClient,
@@ -63,8 +94,8 @@ const { POST } = await import("./route");
 
 const snapshot: PlayerSnapshot = {
   player: {
-    id: "TeKrop-2217",
-    name: "TeKrop",
+    id: "TeKrop#2217",
+    name: "TeKrop#2217",
     avatar: null,
     title: null,
     endorsementLevel: null,
@@ -97,6 +128,9 @@ const snapshot: PlayerSnapshot = {
   roles: {},
   topHeroes: [],
 };
+
+const overstatsProfile = { ok: true, profile_card: { data: { name: "TeKrop#2217" } } };
+const overstatsMatchList = { ok: true, matches: [] };
 
 const analysis: AiAnalysis = {
   summary: "打得还行。",
@@ -135,9 +169,9 @@ beforeEach(() => {
   mocks.createRedisClient.mockReturnValue(mocks.redis);
   mocks.getClientIp.mockReturnValue("1.2.3.4");
   mocks.getRateLimitStatus.mockResolvedValue(availableQuota);
-  mocks.fetchPlayerSummary.mockResolvedValue({ username: "TeKrop" });
-  mocks.fetchPlayerStatsSummary.mockResolvedValue({ general: {} });
-  mocks.buildPlayerSnapshot.mockReturnValue(snapshot);
+  mocks.fetchOverstatsProfile.mockResolvedValue(overstatsProfile);
+  mocks.fetchOverstatsMatchList.mockResolvedValue(overstatsMatchList);
+  mocks.buildOverstatsPlayerSnapshot.mockReturnValue(snapshot);
   mocks.generateAiAnalysis.mockResolvedValue(analysis);
   mocks.consumeRateLimit.mockResolvedValue({
     limit: 5,
@@ -155,14 +189,14 @@ describe("POST /api/analyze", () => {
     expect(await readJson(response)).toEqual({
       ok: false,
       code: "INVALID_BATTLETAG",
-      message: "BattleTag 格式不对，请输入类似 TeKrop#2217 的格式。",
+      message: "国服 BattleTag 格式不对，请输入玩家昵称和数字编号。",
     });
     expect(mocks.createRedisClient).not.toHaveBeenCalled();
   });
 
-  it("returns 404 for OverFast PLAYER_NOT_FOUND without AI or quota consumption", async () => {
-    mocks.fetchPlayerSummary.mockRejectedValue(
-      new mocks.OverfastError("PLAYER_NOT_FOUND", "没有找到这个玩家", {
+  it("returns 404 for Overstats PLAYER_NOT_FOUND without AI or quota consumption", async () => {
+    mocks.fetchOverstatsProfile.mockRejectedValue(
+      new mocks.OverstatsError("PLAYER_NOT_FOUND", "没有找到这个国服玩家", {
         status: 404,
       }),
     );
@@ -173,7 +207,28 @@ describe("POST /api/analyze", () => {
     expect(await readJson(response)).toEqual({
       ok: false,
       code: "PLAYER_NOT_FOUND",
-      message: "没有找到这个玩家",
+      message: "没有找到这个国服玩家",
+    });
+    expect(mocks.generateAiAnalysis).not.toHaveBeenCalled();
+    expect(mocks.consumeRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 when Overstats is unavailable", async () => {
+    mocks.fetchOverstatsMatchList.mockRejectedValue(
+      new mocks.OverstatsError(
+        "OVERSTATS_UNAVAILABLE",
+        "国服数据服务暂时不可用，请稍后再试",
+        { status: 503 },
+      ),
+    );
+
+    const response = await POST(createRequest({ battleTag: "TeKrop#2217" }));
+
+    expect(response.status).toBe(503);
+    expect(await readJson(response)).toEqual({
+      ok: false,
+      code: "OVERSTATS_UNAVAILABLE",
+      message: "国服数据服务暂时不可用，请稍后再试",
     });
     expect(mocks.generateAiAnalysis).not.toHaveBeenCalled();
     expect(mocks.consumeRateLimit).not.toHaveBeenCalled();
@@ -209,7 +264,6 @@ describe("POST /api/analyze", () => {
     const response = await POST(
       createRequest({
         battleTag: "TeKrop#2217",
-        platform: "console",
         gameMode: "quickplay",
       }),
     );
@@ -222,11 +276,14 @@ describe("POST /api/analyze", () => {
       aiError: null,
       quota: consumedQuota,
     });
-    expect(mocks.fetchPlayerStatsSummary).toHaveBeenCalledWith(
-      "TeKrop-2217",
-      "quickplay",
-      "console",
-    );
+    expect(mocks.fetchOverstatsProfile).toHaveBeenCalledWith("TeKrop#2217");
+    expect(mocks.fetchOverstatsMatchList).toHaveBeenCalledWith("TeKrop#2217");
+    expect(mocks.buildOverstatsPlayerSnapshot).toHaveBeenCalledWith({
+      battleTag: "TeKrop#2217",
+      gameMode: "quickplay",
+      profile: overstatsProfile,
+      matchList: overstatsMatchList,
+    });
     expect(mocks.consumeRateLimit).toHaveBeenCalledWith(mocks.redis, "1.2.3.4");
   });
 

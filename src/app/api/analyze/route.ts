@@ -6,11 +6,11 @@ import {
 } from "@/lib/battletag";
 import { DeepSeekError, generateAiAnalysis } from "@/lib/deepseek";
 import {
-  buildPlayerSnapshot,
-  fetchPlayerStatsSummary,
-  fetchPlayerSummary,
-  OverfastError,
-} from "@/lib/overfast";
+  buildOverstatsPlayerSnapshot,
+  fetchOverstatsMatchList,
+  fetchOverstatsProfile,
+  OverstatsError,
+} from "@/lib/overstats";
 import {
   consumeRateLimit,
   createRedisClient,
@@ -26,7 +26,6 @@ export const runtime = "nodejs";
 
 const analyzeRequestSchema = z.object({
   battleTag: z.string().trim().min(1),
-  platform: z.enum(["pc", "console"]).default("pc"),
   gameMode: z.enum(["competitive", "quickplay"]).default("competitive"),
 });
 
@@ -93,22 +92,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const [summary, stats] = await Promise.all([
-      fetchPlayerSummary(normalized.playerId),
-      fetchPlayerStatsSummary(
-        normalized.playerId,
-        parsed.data.gameMode,
-        parsed.data.platform,
-      ),
+    const [profile, matchList] = await Promise.all([
+      fetchOverstatsProfile(normalized.playerId),
+      fetchOverstatsMatchList(normalized.playerId),
     ]);
 
-    const snapshot = buildPlayerSnapshot({
-      playerId: normalized.playerId,
+    const snapshot = buildOverstatsPlayerSnapshot({
       battleTag: normalized.display,
-      platform: parsed.data.platform,
       gameMode: parsed.data.gameMode,
-      summary,
-      stats,
+      profile,
+      matchList,
     });
 
     try {
@@ -164,14 +157,21 @@ export async function POST(request: Request) {
       throw error;
     }
   } catch (error) {
-    if (error instanceof OverfastError) {
+    if (error instanceof OverstatsError) {
+      const status =
+        error.code === "PLAYER_NOT_FOUND"
+          ? 404
+          : error.code === "INVALID_BATTLETAG"
+            ? 400
+            : 503;
+
       return jsonError(
         {
           ok: false,
           code: error.code,
           message: error.message,
         },
-        error.code === "PLAYER_NOT_FOUND" ? 404 : 503,
+        status,
       );
     }
 
